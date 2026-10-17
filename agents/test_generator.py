@@ -21,6 +21,8 @@ class TestGenerator(BaseAgent):
         WorkflowState with populated `generated_tests`.
     """
 
+    __test__: bool = False
+
     def __init__(
         self,
         llm_client: LLMClient | None = None,

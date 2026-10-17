@@ -60,28 +60,29 @@ def test_base_agent_logs_every_run_call(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("agent_cls", "expected_name", "expected_type", "is_llm"),
+    ("agent_cls", "expected_name", "expected_type", "is_llm", "is_stub"),
     [
-        (Orchestrator, "Orchestrator", "code", False),
-        (Analyzer, "Analyzer", "code", False),
-        (TestGenerator, "TestGenerator", "llm", True),
-        (TestExecutor, "TestExecutor", "tool", False),
-        (Localizer, "Localizer", "code", False),
-        (Debugger, "Debugger", "llm", True),
-        (Repairer, "Repairer", "llm", True),
-        (Reviewer, "Reviewer", "llm", True),
-        (Validator, "Validator", "code", False),
-        (Reporter, "Reporter", "code", False),
+        (Orchestrator, "Orchestrator", "code", False, True),
+        (Analyzer, "Analyzer", "code", False, True),
+        (TestGenerator, "TestGenerator", "llm", True, True),
+        (TestExecutor, "TestExecutor", "tool", False, False),
+        (Localizer, "Localizer", "code", False, True),
+        (Debugger, "Debugger", "llm", True, True),
+        (Repairer, "Repairer", "llm", True, True),
+        (Reviewer, "Reviewer", "llm", True, True),
+        (Validator, "Validator", "code", False, True),
+        (Reporter, "Reporter", "code", False, True),
     ],
 )
-def test_all_ten_agent_stubs(
+def test_all_ten_agents_metadata_and_stubs(
     tmp_path: Path,
     agent_cls: type[BaseAgent],
     expected_name: str,
     expected_type: str,
     is_llm: bool,
+    is_stub: bool,
 ) -> None:
-    """Verify each of the 10 agent stubs has the right name, type, and raises NotImplementedError."""
+    """Verify each of the 10 agents has the right name, type, docstring, and stub behavior."""
     logger = RunLogger(run_id=f"run-{expected_name.lower()}", base_dir=tmp_path)
     fake_llm = FakeLLMClient(responses=["stub"])
 
@@ -96,10 +97,12 @@ def test_all_ten_agent_stubs(
     assert agent.__doc__ is not None and len(agent.__doc__.strip()) > 0
 
     state = WorkflowState(run_id=f"run-{expected_name.lower()}")
-    with pytest.raises(NotImplementedError):
+    if is_stub:
+        with pytest.raises(NotImplementedError):
+            agent.run(state)
+    else:
         agent.run(state)
 
-    # Even stub calls raising NotImplementedError are logged by BaseAgent
     logs = logger.read_log()
     assert len(logs) == 1
     assert logs[0]["agent_name"] == expected_name
