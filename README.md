@@ -29,37 +29,46 @@ A Python 3.10+ multi-agent system that autonomously tests, debugs, and repairs b
 
 ```text
 multi-agent-repair/
+  .streamlit/
+    config.toml            # Streamlit server & theme configuration
+    secrets.toml.example   # Example secrets for Streamlit Community Cloud
   core/
     __init__.py
-    config.py          # Environment settings loader (python-dotenv)
-    state.py           # WorkflowState dataclass and WorkflowStatus enum
-    logger.py          # RunLogger for per-run JSONL interaction logs
-    llm.py             # LLMClient ABC, GeminiClient (google-genai), FakeLLMClient
+    config.py              # Settings loader (os.environ -> st.secrets -> defaults)
+    state.py               # WorkflowState dataclass and WorkflowStatus enum
+    logger.py              # RunLogger for per-run JSONL interaction logs
+    llm.py                 # LLMClient ABC, GeminiClient (google-genai), FakeLLMClient
   agents/
     __init__.py
-    base.py            # BaseAgent ABC with dependency injection and run logging
-    orchestrator.py    # Orchestrator stub (code-based)
-    analyzer.py        # Analyzer stub (code-based)
-    test_generator.py  # TestGenerator stub (LLM)
-    test_executor.py   # TestExecutor stub (tool-based)
-    localizer.py       # Localizer stub (code-based)
-    debugger.py        # Debugger stub (LLM)
-    repairer.py        # Repairer stub (LLM)
-    reviewer.py        # Reviewer stub (LLM)
-    validator.py       # Validator stub (code-based)
-    reporter.py        # Reporter stub (code-based)
+    base.py                # BaseAgent ABC with dependency injection and run logging
+    orchestrator.py        # Orchestrator stub (code-based)
+    analyzer.py            # Analyzer stub (code-based)
+    test_generator.py      # TestGenerator stub (LLM)
+    test_executor.py       # TestExecutor implementation (tool-based)
+    localizer.py           # Localizer stub (code-based)
+    debugger.py            # Debugger stub (LLM)
+    repairer.py            # Repairer stub (LLM)
+    reviewer.py            # Reviewer stub (LLM)
+    validator.py           # Validator stub (code-based)
+    reporter.py            # Reporter stub (code-based)
   prompts/
-    .gitkeep           # Prompt templates directory
-  runs/                # Gitignored output folder for per-run JSONL logs
-  tests/               # Unit tests (pytest, no real API calls)
+    .gitkeep               # Prompt templates directory
+  runs/                    # Gitignored output folder for per-run JSONL logs
+  tests/                   # Unit tests (pytest, no real API calls)
     test_config.py
     test_state.py
     test_logger.py
     test_llm.py
     test_agents.py
-  app/                 # Placeholder folder for future Streamlit UI
+    test_test_executor.py
+    test_app.py
+  app/
+    __init__.py
+    helpers.py             # UI helpers, DOT graph builder, built-in samples
+    main.py                # Streamlit UI entrypoint
   README.md
   requirements.txt
+  pytest.ini
   .env.example
   .gitignore
 ```
@@ -86,6 +95,30 @@ multi-agent-repair/
    ```powershell
    Copy-Item .env.example .env
    ```
+
+4. **Launch the Streamlit UI locally:**
+
+   ```powershell
+   streamlit run app/main.py
+   ```
+
+## Deploying to Streamlit Community Cloud
+
+1. **Repository Setup:**
+   Push this repository to GitHub. Ensure `.env` and `.streamlit/secrets.toml` are excluded via `.gitignore` (never commit real keys or passwords).
+2. **Create App on Streamlit Community Cloud:**
+   - **Main file path:** `app/main.py`
+   - **Recommended Python version:** `3.12` or `3.13` (under *Advanced settings*)
+3. **Configure Secrets:**
+   In the Streamlit Community Cloud app dashboard (*Settings -> Secrets*), add your configuration following `.streamlit/secrets.toml.example`:
+   ```toml
+   GEMINI_API_KEY = "your_api_key_here"
+   GEMINI_MODEL = "your_gemini_model_placeholder"
+   ENABLE_CODE_EXECUTION = false
+   APP_PASSWORD = "your_optional_app_password_here"
+   ```
+   - Keep `ENABLE_CODE_EXECUTION = false` on public deployments so the **Try the Test Executor** tab only executes the 3 built-in sample programs rather than arbitrary user-submitted code.
+   - Set `APP_PASSWORD` to require a password before viewing the app, or omit it to allow open access.
 
 ## Running Tests
 

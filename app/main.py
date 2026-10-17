@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import sys
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ import streamlit as st
 
 from agents.test_executor import TestExecutor
 from app.helpers import (
+    BUILTIN_SAMPLES,
     DEFAULT_SAMPLE_CODE,
     DEFAULT_SAMPLE_TESTS,
     build_pipeline_dot,
@@ -22,6 +24,7 @@ from app.helpers import (
     list_available_runs,
     load_run_logs,
 )
+from core.config import load_config
 
 PAGE_TITLE = (
     "Multi-Agent AI System for Autonomous Software Testing, "
@@ -31,6 +34,38 @@ PAGE_SUBTITLE = (
     "Supervisor-orchestrated multi-agent pipeline for automated test generation, "
     "isolated pytest execution, fault localization, and iterative bug repair."
 )
+
+
+def _check_password_gate(expected_password: str) -> bool:
+    """Enforce optional password gate using hmac.compare_digest and st.session_state.
+
+    Returns True when access is granted (or when no APP_PASSWORD is set).
+    """
+    if not expected_password:
+        return True
+
+    if st.session_state.get("authenticated", False):
+        return True
+
+    st.subheader("Authentication Required")
+    entered = st.text_input(
+        "Enter application password",
+        type="password",
+        key="app_password_input",
+    )
+    if not entered:
+        st.info("Please enter the password to access the application.")
+        return False
+
+    if hmac.compare_digest(
+        entered.encode("utf-8"),
+        expected_password.encode("utf-8"),
+    ):
+        st.session_state["authenticated"] = True
+        return True
+
+    st.error("Incorrect password.")
+    return False
 
 
 def _render_sidebar() -> None:
@@ -65,9 +100,13 @@ def _render_pipeline_tab() -> None:
 
     col_legend_1, col_legend_2, col_legend_3 = st.columns(3)
     with col_legend_1:
-        st.markdown("🟦 **Code-based Agent** (`Orchestrator`, `Analyzer`, `Localizer`, `Validator`, `Reporter`)")
+        st.markdown(
+            "🟦 **Code-based Agent** (`Orchestrator`, `Analyzer`, `Localizer`, `Validator`, `Reporter`)"
+        )
     with col_legend_2:
-        st.markdown("🟨 **LLM-powered Agent** (`Test Generator`, `Debugger`, `Repairer`, `Reviewer`)")
+        st.markdown(
+            "🟨 **LLM-powered Agent** (`Test Generator`, `Debugger`, `Repairer`, `Reviewer`)"
+        )
     with col_legend_3:
         st.markdown("🟩 **Tool-based Agent** (`Test Executor`)")
 
@@ -107,9 +146,15 @@ def _render_test_results(result: dict[str, Any]) -> None:
         st.table(summary_rows)
 
         for idx, failure in enumerate(failures, start=1):
-            title = f"{idx}. {failure.get('test_name', 'test')} — {failure.get('message', '')}"
+            title = (
+                f"{idx}. {failure.get('test_name', 'test')} — "
+                f"{failure.get('message', '')}"
+            )
             with st.expander(title, expanded=True):
-                st.code(failure.get("traceback", "") or "No traceback available.", language="text")
+                st.code(
+                    failure.get("traceback", "") or "No traceback available.",
+                    language="text",
+                )
 
     with st.expander("Standard Output (stdout)", expanded=False):
         st.code(result.get("stdout", "") or "(empty)", language="text")
@@ -118,35 +163,60 @@ def _render_test_results(result: dict[str, Any]) -> None:
         st.code(result.get("stderr", "") or "(empty)", language="text")
 
 
-def _render_test_executor_tab() -> None:
-    """Render the interactive TestExecutor sandbox tab."""
+def _render_test_executor_tab(enable_code_execution: bool) -> None:
+    """Render the TestExecutor tab in either editable mode or safe hosted preset mode."""
     st.subheader("Try the Test Executor")
-    st.markdown(
-        "Enter Python source code (`solution.py`) and a `pytest` suite "
-        "(`test_solution.py`). Clicking **Run tests** executes `pytest` in an "
-        "isolated temporary directory using `TestExecutor.execute()`."
-    )
 
-    col_code, col_tests = st.columns(2)
-    with col_code:
-        code_input = st.text_area(
-            "Python code (saved as solution.py)",
-            value=DEFAULT_SAMPLE_CODE,
-            height=240,
-            key="executor_code_input",
+    if enable_code_execution:
+        st.markdown(
+            "Enter Python source code (`solution.py`) and a `pytest` suite "
+            "(`test_solution.py`). Clicking **Run tests** executes `pytest` in an "
+            "isolated temporary directory using `TestExecutor.execute()`."
         )
-    with col_tests:
-        tests_input = st.text_area(
-            "pytest tests (saved as test_solution.py)",
-            value=DEFAULT_SAMPLE_TESTS,
-            height=240,
-            key="executor_tests_input",
+        col_code, col_tests = st.columns(2)
+        with col_code:
+            code_to_run = st.text_area(
+                "Python code (saved as solution.py)",
+                value=DEFAULT_SAMPLE_CODE,
+                height=240,
+                key="executor_code_input",
+            )
+        with col_tests:
+            tests_to_run = st.text_area(
+                "pytest tests (saved as test_solution.py)",
+                value=DEFAULT_SAMPLE_TESTS,
+                height=240,
+                key="executor_tests_input",
+            )
+    else:
+        st.info(
+            "Free-form code execution is disabled on the hosted version for "
+            "security (`ENABLE_CODE_EXECUTION=false`). Select one of the 3 "
+            "built-in sample programs below to try the Test Executor."
         )
+        sample_names = list(BUILTIN_SAMPLES.keys())
+        selected_name = st.selectbox(
+            "Choose a built-in sample program",
+            options=sample_names,
+            index=0,
+            key="sample_program_selector",
+        )
+        selected_sample = BUILTIN_SAMPLES[selected_name]
+        code_to_run = selected_sample["code"]
+        tests_to_run = selected_sample["tests"]
+
+        col_code, col_tests = st.columns(2)
+        with col_code:
+            st.markdown("**Python code (`solution.py`)**")
+            st.code(code_to_run, language="python")
+        with col_tests:
+            st.markdown("**pytest tests (`test_solution.py`)**")
+            st.code(tests_to_run, language="python")
 
     if st.button("Run tests", type="primary", key="run_tests_button"):
         executor = TestExecutor()
         with st.spinner("Running pytest in isolated temporary directory..."):
-            result = executor.execute(code=code_input, tests=tests_input)
+            result = executor.execute(code=code_to_run, tests=tests_to_run)
         st.session_state["last_executor_result"] = result
 
     if "last_executor_result" in st.session_state:
@@ -161,7 +231,9 @@ def _render_run_logs_tab() -> None:
     run_ids = list_available_runs(runs_dir)
 
     if not run_ids:
-        st.info("No runs recorded yet. Logs written to `runs/<run_id>/log.jsonl` will appear here.")
+        st.info(
+            "No runs recorded yet. Logs written to `runs/<run_id>/log.jsonl` will appear here."
+        )
         return
 
     selected_run = st.selectbox("Select a run ID", options=run_ids, key="run_selector")
@@ -201,8 +273,13 @@ def _render_run_logs_tab() -> None:
 
 
 def main() -> None:
-    """Configure page and render the main Streamlit application."""
+    """Configure page, enforce optional password gate, and render the application."""
     st.set_page_config(page_title=PAGE_TITLE, layout="wide")
+    cfg = load_config()
+
+    if not _check_password_gate(cfg.APP_PASSWORD):
+        return
+
     st.title(PAGE_TITLE)
     st.caption(PAGE_SUBTITLE)
 
@@ -214,7 +291,7 @@ def main() -> None:
     with tab_pipeline:
         _render_pipeline_tab()
     with tab_executor:
-        _render_test_executor_tab()
+        _render_test_executor_tab(enable_code_execution=cfg.ENABLE_CODE_EXECUTION)
     with tab_logs:
         _render_run_logs_tab()
 

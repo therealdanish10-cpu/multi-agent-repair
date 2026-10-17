@@ -39,6 +39,54 @@ def test_add_with_zero():
     assert add(5, 0) == 5
 """
 
+CORRECT_SAMPLE_CODE: str = """def add(a: int, b: int) -> int:
+    \"\"\"Return the sum of a and b.\"\"\"
+    return a + b
+"""
+
+CORRECT_SAMPLE_TESTS: str = """from solution import add
+
+
+def test_add_positive_numbers():
+    assert add(2, 3) == 5
+
+
+def test_add_with_zero():
+    assert add(5, 0) == 5
+"""
+
+FAILING_TEST_SAMPLE_CODE: str = """def safe_divide(a: float, b: float) -> float:
+    \"\"\"Divide a by b, but forgets to handle division by zero.\"\"\"
+    return a / b
+"""
+
+FAILING_TEST_SAMPLE_TESTS: str = """from solution import safe_divide
+
+
+def test_divide_normal():
+    assert safe_divide(10, 2) == 5.0
+
+
+def test_divide_by_zero_returns_zero():
+    assert safe_divide(10, 0) == 0.0
+"""
+
+# Three built-in sample programs for safe hosted mode (ENABLE_CODE_EXECUTION=False)
+BUILTIN_SAMPLES: dict[str, dict[str, str]] = {
+    "Buggy program (add subtracts instead of adding)": {
+        "code": DEFAULT_SAMPLE_CODE,
+        "tests": DEFAULT_SAMPLE_TESTS,
+    },
+    "Correct program (all tests pass)": {
+        "code": CORRECT_SAMPLE_CODE,
+        "tests": CORRECT_SAMPLE_TESTS,
+    },
+    "Failing-test program (unhandled division by zero)": {
+        "code": FAILING_TEST_SAMPLE_CODE,
+        "tests": FAILING_TEST_SAMPLE_TESTS,
+    },
+}
+
 AGENT_TYPE_LABELS: dict[str, str] = {
     "llm": "LLM-powered",
     "code": "code-based",
